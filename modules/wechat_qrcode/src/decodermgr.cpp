@@ -6,6 +6,9 @@
 // Copyright (C) 2020 THL A29 Limited, a Tencent company. All rights reserved.
 #include "precomp.hpp"
 #include "decodermgr.hpp"
+#include "zxing/common/stringutils.hpp"
+#include <string>
+#include <iconv.h>
 
 
 using zxing::ArrayRef;
@@ -46,6 +49,18 @@ int DecoderMgr::decodeImage(cv::Mat src, bool use_nn_detector, string& result) {
         int ret = TryDecode(source, zx_result);
         if (!ret) {
             result = zx_result->getText()->getText();
+            zxing::common::StringUtils zx_su;
+            std::string charset = zx_su.guessEncoding(const_cast<char*>(result.c_str()),
+                    static_cast<int>(result.length()));
+            if (charset == "GB2312") {
+                iconv_t cd = iconv_open("UTF-8", "GBK");
+                enum { max_gb_char = (int) (10208 / 13) + 1 };
+                char buf[max_gb_char], *out = buf, *in = const_cast<char*>(result.c_str());
+                size_t n_in = result.size(), n_out = max_gb_char;
+                iconv(cd, &in, &n_in, &out, &n_out);
+                *out = 0;
+                result = buf;
+            }
             return ret;
         }
         // try different binarizers
